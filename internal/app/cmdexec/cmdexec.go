@@ -1,6 +1,7 @@
 package cmdexec
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -11,16 +12,16 @@ import (
 	"time"
 )
 
-func Exec(cmd string, w http.ResponseWriter /*, ch chan bool*/) {
+func Exec(cmd sql.NullString, w http.ResponseWriter /*, ch chan bool*/) {
 	// Если команда короткая, просто выполняем ее и выводим результат
-	out, _ := exec.Command(cmd).Output()
+	out, _ := exec.Command(cmd.String).Output()
 	out = []byte(strings.ReplaceAll(string(out), "\n", "\n\t"))
-	log.Printf("exec: %s\n \t%s\n", cmd, out)
+	log.Printf("exec: %s\n \t%s\n", cmd.String, out)
 	io.WriteString(w, string(out))
 	io.WriteString(w, "Done")
 }
 
-func ExecLong(cmds []string, w http.ResponseWriter, ch chan bool) {
+func ExecLong(cmds []sql.NullString, w http.ResponseWriter, ch chan bool) {
 	id := NextID()
 	io.WriteString(w, "Long command is running. Command ID "+fmt.Sprint(id))
 	ch <- true
@@ -38,13 +39,13 @@ func ExecLong(cmds []string, w http.ResponseWriter, ch chan bool) {
 		// Выполняем очередную команду из списка
 		default:
 			time.Sleep(5 * time.Second)
-			out, err := exec.Command(cmd).Output()
+			out, err := exec.Command(cmd.String).Output()
 			if err != nil {
 				log.Println("exec: Error. " + err.Error())
 				exit = true
 			}
 			out = []byte(strings.ReplaceAll(string(out), "\n", "\t"))
-			log.Printf("exec: Long command ID %d '%s'\n \t%s", id, cmd, out)
+			log.Printf("exec: Long command ID %d '%s'\n \t%s", id, cmd.String, out)
 		}
 		if exit {
 			break

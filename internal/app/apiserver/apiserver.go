@@ -6,25 +6,29 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/a-schus/REST-API/internal/app/cmdexec"
+	"github.com/a-schus/REST-API/internal/app/store"
 )
 
 type APIServer struct {
 	server *http.Server
+	db     *store.Store
 }
 
-func New(ip string) *APIServer {
+func New(ip string, _db *store.Store) *APIServer {
 	log.Printf("APIServer: The IP address being listened to %s\n", ip)
 
 	return &APIServer{
 		server: &http.Server{
 			Addr: ip,
 		},
+		db: _db,
 	}
 }
 
@@ -34,6 +38,7 @@ func (s *APIServer) Start() {
 	mux.HandleFunc("/close", s.closeHandler)
 	mux.HandleFunc("/date", s.dateHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
+	mux.HandleFunc("/cmd", s.cmdHandler)
 
 	s.server.Handler = mux
 
@@ -75,22 +80,40 @@ func (s *APIServer) closeHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *APIServer) dateHandler(w http.ResponseWriter, req *http.Request) {
-	log.Printf("http: Received %v request", req.RequestURI)
+	// log.Printf("http: Received %v request", req.RequestURI)
 
-	// TO-DO получение и парсинг команды
-	cmd := []string{"date", "date", "date"}
+	// // TO-DO получение и парсинг команды
+	// cmd := []sql.NullString{"date", "date", "date"}
 
-	if len(cmd) <= 1 {
-		cmdexec.Exec(cmd[0], w)
-	} else {
-		ch := make(chan bool)
-		go cmdexec.ExecLong(cmd, w, ch)
-		<-ch // ждем сообщения, что длинная команда запущена, и отпускаем горутину
-	}
+	// if len(cmd) <= 1 {
+	// 	cmdexec.Exec(cmd[0], w)
+	// } else {
+	// 	ch := make(chan bool)
+	// 	go cmdexec.ExecLong(cmd, w, ch)
+	// 	<-ch // ждем сообщения, что длинная команда запущена, и отпускаем горутину
+	// }
 }
 
 func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("http: Received %v request", req.RequestURI)
 	// TO-DO получение очередного ID
 	cmdexec.Stop(1, w)
+}
+
+func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
+
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	command := params.Get("cmd")
+
+	if command == "" {
+		if res, err := s.db.GetAllCommands(); err != nil {
+			io.WriteString(w, err.Error())
+		} else {
+			io.WriteString(w, *res)
+		}
+	} else {
+		res, _, _ := s.db.GetCommand(command)
+		io.WriteString(w, res)
+	}
+
 }

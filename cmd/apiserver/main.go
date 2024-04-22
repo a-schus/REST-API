@@ -22,7 +22,7 @@ func main() {
 	}
 	defer db.Close()
 
-	server := apiserver.New(*ip)
+	server := apiserver.New(*ip, &db)
 	server.Start()
 
 	fmt.Println("!Ok")
