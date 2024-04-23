@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -39,6 +40,7 @@ func (s *APIServer) Start() {
 	mux.HandleFunc("/date", s.dateHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
 	mux.HandleFunc("/cmd", s.cmdHandler)
+	mux.HandleFunc("/new", s.newHandler)
 
 	s.server.Handler = mux
 
@@ -100,20 +102,53 @@ func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
 	cmdexec.Stop(1, w)
 }
 
+// Обработчик запроса 'cmd'
+// В зависимости от наличия или отсутствия параметров возвращает в ответ
+// список всех команд с описанием или описание и содержимое запрошенной команды
 func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
-
 	params, _ := url.ParseQuery(req.URL.RawQuery)
 	command := params.Get("cmd")
 
 	if command == "" {
-		if res, err := s.db.GetAllCommands(); err != nil {
-			io.WriteString(w, err.Error())
+		// если URL без параметров
+		if response, err := s.db.GetAllCommands(); err != nil {
+			w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error"))
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
 		} else {
-			io.WriteString(w, *res)
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(*response))
+			w.WriteHeader(http.StatusOK)
 		}
 	} else {
-		res, _, _ := s.db.GetCommand(command)
-		io.WriteString(w, res)
+		// если URL с параметром
+		if response, cmds, err := s.db.GetCommand(command); err != nil {
+			w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error\n"))
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			response += ":\t"
+			for _, cmd := range cmds {
+				response += cmd.String + "; "
+			}
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(response))
+			w.WriteHeader(http.StatusOK)
+		}
 	}
+}
 
+func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	name := params.Get("name")
+	desc := params.Get("desc")
+	cmd := params.Get("cmd")
+
+	err := s.db.NewCommand(name, desc, cmd)
+	if err != nil {
+		w.Write([]byte(err.Error()))
+	} else {
+		w.Write([]byte("Ok!"))
+		w.WriteHeader(http.StatusOK)
+	}
 }

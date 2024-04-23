@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/lib/pq"
-	_ "github.com/lib/pq"
 )
 
 var databaseURL = "user=postgres password=1234 host=localhost dbname=restapi_dev sslmode=disable"
@@ -84,25 +83,20 @@ func (s *Store) initEmptyDB() error {
 }
 func (s *Store) GetAllCommands() (*string, error) {
 	var res string
-	rows, err := s.DB.Query("SELECT name, description, command FROM Commands")
+	rows, err := s.DB.Query("SELECT name, description FROM Commands")
 	if err != nil {
 		return &res, err
 	}
+	defer rows.Close()
 
 	var id int = 1
 	for rows.Next() {
 		var name string
 		var desc string
-		var comm []sql.NullString
 
-		rows.Scan(&name, &desc, pq.Array(&comm))
+		rows.Scan(&name, &desc)
 
-		var sComm string
-		for _, com := range comm {
-			sComm += com.String + "; "
-		}
-
-		res += fmt.Sprintf("%d\t", id) + name + "\t" + desc + "\t" + sComm + "\n\n"
+		res += fmt.Sprintf("%d\t", id) + name + "\t" + desc + "\n\n"
 		id++
 	}
 	return &res, nil
@@ -110,10 +104,10 @@ func (s *Store) GetAllCommands() (*string, error) {
 
 func (s *Store) GetCommand(name string) (string, []sql.NullString, error) {
 	var desc string
-	var comm []sql.NullString
+	var cmd []sql.NullString
 
-	rows := s.DB.QueryRow("SELECT description, command FROM Commands WHERE name = '" + name + "'")
-	err := rows.Scan(&desc, pq.Array(&comm))
+	row := s.DB.QueryRow("SELECT description, command FROM Commands WHERE name = '" + name + "'")
+	err := row.Scan(&desc, pq.Array(&cmd))
 
 	if err != nil {
 		return "", []sql.NullString{}, err
@@ -126,5 +120,15 @@ func (s *Store) GetCommand(name string) (string, []sql.NullString, error) {
 
 	// desc += "\t" + sComm + "\n\n"
 
-	return desc, comm, nil
+	return desc, cmd, nil
+}
+
+func (s *Store) NewCommand(name string, desc string, cmd string) error {
+	var cmds pq.StringArray
+	cmds = append(cmds, cmd, "djdgwnfof893idjkf")
+	// cmd = "ARRAY['" + cmd + "']"
+	// cmd = "'{\"" + cmd + "\"}'"
+	// res, err := s.DB.Exec("INSERT INTO Commands (name, command) VALUES ('" + name + "', " + cmd + ")")
+	_, err := s.DB.Exec("INSERT INTO Commands (name, command) VALUES ($1, $2)", name, cmds)
+	return err
 }
