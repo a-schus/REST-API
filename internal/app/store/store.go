@@ -81,11 +81,11 @@ func (s *Store) initEmptyDB() error {
 
 	return nil
 }
-func (s *Store) GetAllCommands() (*string, error) {
-	var res string
+func (s *Store) GetAllCommands() (commandsList []string, e error) {
+	var res []string
 	rows, err := s.DB.Query("SELECT name, description FROM Commands")
 	if err != nil {
-		return &res, err
+		return res, err
 	}
 	defer rows.Close()
 
@@ -96,21 +96,21 @@ func (s *Store) GetAllCommands() (*string, error) {
 
 		rows.Scan(&name, &desc)
 
-		res += fmt.Sprintf("%d\t", id) + name + "\t" + desc + "\n\n"
+		res = append(res, fmt.Sprintf("%d\t", id)+name+"\t"+desc+"\n\n")
 		id++
 	}
-	return &res, nil
+	return res, nil
 }
 
-func (s *Store) GetCommand(name string) (string, []sql.NullString, error) {
+func (s *Store) GetCommand(name string) (description string, commands pq.StringArray, e error) {
 	var desc string
-	var cmd []sql.NullString
+	var cmd pq.StringArray
 
-	row := s.DB.QueryRow("SELECT description, command FROM Commands WHERE name = '" + name + "'")
-	err := row.Scan(&desc, pq.Array(&cmd))
+	row := s.DB.QueryRow("SELECT description, command FROM Commands WHERE name = $1", name)
+	err := row.Scan(&desc, &cmd)
 
 	if err != nil {
-		return "", []sql.NullString{}, err
+		return "", pq.StringArray{}, err
 	}
 
 	// var sComm string
@@ -123,12 +123,9 @@ func (s *Store) GetCommand(name string) (string, []sql.NullString, error) {
 	return desc, cmd, nil
 }
 
-func (s *Store) NewCommand(name string, desc string, cmd string) error {
-	var cmds pq.StringArray
-	cmds = append(cmds, cmd, "djdgwnfof893idjkf")
-	// cmd = "ARRAY['" + cmd + "']"
-	// cmd = "'{\"" + cmd + "\"}'"
-	// res, err := s.DB.Exec("INSERT INTO Commands (name, command) VALUES ('" + name + "', " + cmd + ")")
-	_, err := s.DB.Exec("INSERT INTO Commands (name, command) VALUES ($1, $2)", name, cmds)
+func (s *Store) NewCommand(name string, desc string, cmds pq.StringArray) error {
+	// cmds := pq.StringArray{cmd}
+	// cmds = append(cmds, cmd, "djdgwnfof893idjkf")
+	_, err := s.DB.Exec("INSERT INTO Commands (name, description, command) VALUES ($1, $2, $3)", name, desc, cmds)
 	return err
 }

@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,11 +11,13 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/a-schus/REST-API/internal/app/cmdexec"
 	"github.com/a-schus/REST-API/internal/app/store"
+	"github.com/lib/pq"
 )
 
 type APIServer struct {
@@ -35,12 +38,11 @@ func New(ip string, _db *store.Store) *APIServer {
 
 func (s *APIServer) Start() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/h", s.hHandler)
 	mux.HandleFunc("/close", s.closeHandler)
-	mux.HandleFunc("/date", s.dateHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
 	mux.HandleFunc("/cmd", s.cmdHandler)
 	mux.HandleFunc("/new", s.newHandler)
+	mux.HandleFunc("/exec", s.execHandler)
 
 	s.server.Handler = mux
 
@@ -68,32 +70,12 @@ func (s *APIServer) Start() {
 	}
 }
 
-func (s *APIServer) hHandler(w http.ResponseWriter, req *http.Request) {
-	log.Printf("http: Received %v request", req.RequestURI)
-	io.WriteString(w, "Hello, client!\n")
-}
-
 func (s *APIServer) closeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("http: Received %v request", req.RequestURI)
 	pid := os.Getpid()
 	proc, _ := os.FindProcess(pid)
 	proc.Signal(syscall.SIGUSR1)
 	io.WriteString(w, "APIServer: Server stoped")
-}
-
-func (s *APIServer) dateHandler(w http.ResponseWriter, req *http.Request) {
-	// log.Printf("http: Received %v request", req.RequestURI)
-
-	// // TO-DO получение и парсинг команды
-	// cmd := []sql.NullString{"date", "date", "date"}
-
-	// if len(cmd) <= 1 {
-	// 	cmdexec.Exec(cmd[0], w)
-	// } else {
-	// 	ch := make(chan bool)
-	// 	go cmdexec.ExecLong(cmd, w, ch)
-	// 	<-ch // ждем сообщения, что длинная команда запущена, и отпускаем горутину
-	// }
 }
 
 func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
@@ -107,7 +89,7 @@ func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
 // список всех команд с описанием или описание и содержимое запрошенной команды
 func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 	params, _ := url.ParseQuery(req.URL.RawQuery)
-	command := params.Get("cmd")
+	command := params.Get("name")
 
 	if command == "" {
 		// если URL без параметров
@@ -117,7 +99,9 @@ func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte(*response))
+			for _, row := range response {
+				w.Write([]byte(row))
+			}
 			w.WriteHeader(http.StatusOK)
 		}
 	} else {
@@ -129,26 +113,82 @@ func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 		} else {
 			response += ":\t"
 			for _, cmd := range cmds {
-				response += cmd.String + "; "
+				response += cmd + "; "
 			}
-			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte(response))
+			w.Write([]byte(response + "\n"))
 			w.WriteHeader(http.StatusOK)
 		}
 	}
 }
 
-func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
-	params, _ := url.ParseQuery(req.URL.RawQuery)
-	name := params.Get("name")
-	desc := params.Get("desc")
-	cmd := params.Get("cmd")
+type Args struct {
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+	Cmd  string `json:"cmd"`
+}
 
-	err := s.db.NewCommand(name, desc, cmd)
+func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
+	/* Формат POST запроса curl, содержащего новую команду в теле
+	curl -X POST -json -d '{
+		"name": "data",
+		"desc": "Show current data",
+		"cmd": "echo \"Current data: \";data"
+	}' http://localhost:8080/new
+	*/
+
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	var name, desc, cmd, splitter string
+
+	contLen := req.ContentLength
+	// Если запрос содержит тело, аргументы, переданные через URL игнорируются
+	if contLen > 0 {
+		contByte := make([]byte, contLen)
+		req.Body.Read(contByte)
+
+		args := Args{}
+
+		e := json.Unmarshal(contByte, &args)
+		fmt.Println(e)
+
+		name = args.Name
+		desc = args.Desc
+		cmd = args.Cmd
+		splitter = ";"
+	} else {
+		name = params.Get("name")
+		desc = params.Get("desc")
+		cmd = params.Get("cmd")
+		splitter = "@@"
+	}
+
+	cmds := pq.StringArray(strings.Split(cmd, splitter))
+
+	err := s.db.NewCommand(name, desc, cmds)
 	if err != nil {
 		w.Write([]byte(err.Error()))
 	} else {
 		w.Write([]byte("Ok!"))
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	name := params.Get("name")
+	_, cmd, err := s.db.GetCommand(name)
+
+	if err != nil {
+		w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusBadRequest)
+	} else {
+		if len(cmd) == 1 {
+			cmdexec.Exec(cmd[0], w)
+		} else if len(cmd) > 1 {
+			ch := make(chan (bool))
+			go cmdexec.ExecLong(cmd, w, ch)
+			<-ch
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 }
