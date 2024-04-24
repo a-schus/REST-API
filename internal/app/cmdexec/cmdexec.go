@@ -22,9 +22,9 @@ func Exec(cmd string, w http.ResponseWriter /*, ch chan bool*/) {
 }
 
 func ExecLong(cmds pq.StringArray, w http.ResponseWriter, ch chan bool) {
-	for i, cmd := range cmds {
-		cmds[i] = strings.ReplaceAll(cmd, "\"", "'")
-	}
+	// for i, cmd := range cmds {
+	// 	cmds[i] = strings.ReplaceAll(cmd, "\"", "'")
+	// }
 	id := NextID()
 	io.WriteString(w, "Long command is running. Command ID "+fmt.Sprint(id))
 	ch <- true
