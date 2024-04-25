@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -26,8 +26,6 @@ type APIServer struct {
 }
 
 func New(ip string, _db *store.Store) *APIServer {
-	log.Printf("APIServer: The IP address being listened to %s\n", ip)
-
 	return &APIServer{
 		server: &http.Server{
 			Addr: ip,
@@ -51,10 +49,12 @@ func (s *APIServer) Start() {
 		log.Printf("APIServer: Server started")
 
 		if err := s.server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("%v", err)
+			log.Fatalf("%v", err)
 		}
 		log.Println("APIServer: Server stoped")
 	}()
+
+	log.Printf("APIServer: The IP address being listened to %s\n", s.server.Addr)
 
 	// Мониторим системные сигналы на завершение программы
 	// и пользовательский сигнал запроса /close
@@ -75,13 +75,21 @@ func (s *APIServer) closeHandler(w http.ResponseWriter, req *http.Request) {
 	pid := os.Getpid()
 	proc, _ := os.FindProcess(pid)
 	proc.Signal(syscall.SIGUSR1)
-	io.WriteString(w, "APIServer: Server stoped")
+	// io.WriteString(w, "APIServer: Server stoped")
+	w.Write([]byte("APIServer: Server stoped\n"))
 }
 
 func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
-	log.Printf("http: Received %v request", req.RequestURI)
-	// TO-DO получение очередного ID
-	cmdexec.Stop(1, w)
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	// var id int
+	id, err := strconv.Atoi(params.Get("id"))
+
+	log.Printf("Received %v request", req.RequestURI)
+	if err != nil {
+		log.Println(err.Error())
+	} else {
+		cmdexec.Stop(id, w)
+	}
 }
 
 // Обработчик запроса 'cmd'
@@ -94,29 +102,31 @@ func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 	if command == "" {
 		// если URL без параметров
 		if response, err := s.db.GetAllCommands(); err != nil {
-			w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error"))
-			w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error"))
+			// w.Write([]byte(err.Error()))
+			// w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			w.Header().Set("Content-Type", "text/plain")
 			for _, row := range response {
 				w.Write([]byte(row))
 			}
-			w.WriteHeader(http.StatusOK)
+			// w.WriteHeader(http.StatusOK)
 		}
 	} else {
 		// если URL с параметром
 		if response, cmds, err := s.db.GetCommand(command); err != nil {
-			w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error\n"))
-			w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error\n"))
+			// w.Write([]byte(err.Error()))
+			// w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			response += ":\t"
 			for _, cmd := range cmds {
 				response += cmd + "; "
 			}
 			w.Write([]byte(response + "\n"))
-			w.WriteHeader(http.StatusOK)
+			// w.WriteHeader(http.StatusOK)
 		}
 	}
 }
@@ -128,11 +138,12 @@ type Args struct {
 }
 
 func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
+
 	/* Формат POST запроса curl, содержащего новую команду в теле
 	curl -X POST -json -d '{
-		"name": "data",
-		"desc": "Show current data",
-		"cmd": "echo \"Current data: \";data"
+		"name": "date",
+		"desc": "Show current date",
+		"cmd": "echo \"Current date: \";date"
 	}' http://localhost:8080/new
 	*/
 
@@ -165,9 +176,10 @@ func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
 
 	err := s.db.NewCommand(name, desc, cmds)
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		// w.Write([]byte(err.Error()))
 	} else {
-		w.Write([]byte("Ok!"))
+		// w.Write([]byte("Ok!"))
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -178,17 +190,18 @@ func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
 	_, cmd, err := s.db.GetCommand(name)
 
 	if err != nil {
-		w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
+		// w.Write([]byte(err.Error()))
+		// w.WriteHeader(http.StatusBadRequest)
 	} else {
 		if len(cmd) == 1 {
 			cmdexec.Exec(cmd[0], w)
 		} else if len(cmd) > 1 {
 			ch := make(chan (bool))
-			go cmdexec.ExecLong(cmd, w, ch)
-			<-ch
+			go cmdexec.ExecLong(name, cmd, s.db, w, ch)
+			<-ch // ждем, сообщения о запуске долгой команды
 		}
-		w.WriteHeader(http.StatusOK)
+		// w.WriteHeader(http.StatusOK)
 	}
 }
