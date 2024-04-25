@@ -46,15 +46,14 @@ func (s *APIServer) Start() {
 
 	// Запускаем прослушивание порта
 	go func() {
-		log.Printf("APIServer: Server started")
-
 		if err := s.server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("%v", err)
 		}
-		log.Println("APIServer: Server stoped")
+		log.Println("Server stoped")
 	}()
 
-	log.Printf("APIServer: The IP address being listened to %s\n", s.server.Addr)
+	log.Printf("Server started")
+	log.Printf("The IP address being listened to %s\n", s.server.Addr)
 
 	// Мониторим системные сигналы на завершение программы
 	// и пользовательский сигнал запроса /close
@@ -71,12 +70,12 @@ func (s *APIServer) Start() {
 }
 
 func (s *APIServer) closeHandler(w http.ResponseWriter, req *http.Request) {
-	log.Printf("http: Received %v request", req.RequestURI)
+	log.Printf("Received %v request", req.RequestURI)
 	pid := os.Getpid()
 	proc, _ := os.FindProcess(pid)
 	proc.Signal(syscall.SIGUSR1)
 	// io.WriteString(w, "APIServer: Server stoped")
-	w.Write([]byte("APIServer: Server stoped\n"))
+	w.Write([]byte("Server stoped\n"))
 }
 
 func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
