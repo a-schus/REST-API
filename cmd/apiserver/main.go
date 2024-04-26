@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	ip := flag.String("ip", "0.0.0.0:8080", "IP")
+	ip := flag.String("ip", "localhost:8080", "IP")
 
 	flag.Parse()
 

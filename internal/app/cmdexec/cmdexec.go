@@ -37,16 +37,20 @@ func ExecLong(name string, cmds pq.StringArray, db *store.Store, w http.Response
 	stopCh, _ := cmdChans.Add(id)
 	exit := false
 
-	for _, cmd := range cmds {
+	for i, cmd := range cmds {
 		select {
 		// Проверяем не поступила ли команда остановить выполнение задачи
 		case <-stopCh:
 			log.Printf("Long command ID %d is stoped", id)
 			db.WriteLog(id, name, cmd, "Stoped by user")
+			cmdChans.Remove(id) // удаляем команду из списка запущенных
 			exit = true
 
-		// Выполняем очередную команду из списка
+			// Выполняем очередную команду из списка
 		default:
+			if i == len(cmds)-1 {
+				cmdChans.Remove(id) // удаляем команду из списка запущенных
+			}
 			time.Sleep(10 * time.Second)
 			out, err := exec.Command("bash", "-c", cmd).Output()
 			if err != nil {
@@ -55,36 +59,25 @@ func ExecLong(name string, cmds pq.StringArray, db *store.Store, w http.Response
 				exit = true
 			}
 			res := strings.ReplaceAll(string(out), "\n", "\t")
-			// log.Printf("Long command ID %d '%s'\n \t%s", id, cmd, out)
+			log.Printf("Long command ID %d '%s'\n \t%s", id, cmd, out)
 			db.WriteLog(id, name, cmd, res)
 		}
 		if exit {
 			break
 		}
 	}
-	// close(cmdChans.cmdChans[id])
-	cmdChans.Remove(id) // удаляем команду из списка запущенных
 	if !exit {
 		log.Printf("exec: Long command ID %d is done", id)
 		db.WriteLog(id, name, "", "Long command is done")
-
 	}
 }
-
-// func NextID() int {
-// 	return 1
-// }
 
 // Останавливает команду по переданному ID
 func Stop(id int, w http.ResponseWriter) {
 	if ch, ok := cmdChans.cmdChans[id]; ok {
 		ch <- true
-		// io.WriteString(w, "Long command ID "+fmt.Sprint(id)+" stoped\n")
 		w.Write([]byte("Long command ID " + fmt.Sprint(id) + " stoped\n"))
-
-		// cmdChans.Remove(id)
 	} else {
-		// io.WriteString(w, "Long command ID "+fmt.Sprint(id)+" not runing\n")
 		w.Write([]byte("Long command ID " + fmt.Sprint(id) + " not runing\n"))
 		log.Printf("exec: Long command ID %d not runing\n", id)
 	}
@@ -93,23 +86,24 @@ func Stop(id int, w http.ResponseWriter) {
 // Структура для хранения ID и канала для каждой долгой команды
 type chanId struct {
 	mut      sync.Mutex
-	cmdChans map[int]chan (bool)
+	cmdChans map[int]chan bool
 }
 
 var cmdChans = NewChanId()
 
 func NewChanId() chanId {
+	ch := make(map[int]chan bool, 1)
 	return chanId{
-		cmdChans: make(map[int]chan (bool)),
+		cmdChans: ch,
 	}
 }
 
-func (c *chanId) Add(id int) (chan (bool), bool) {
+func (c *chanId) Add(id int) (chan bool, bool) {
 	c.mut.Lock()
 	if _, err := c.cmdChans[id]; err {
 		return nil, false
 	}
-	c.cmdChans[id] = make(chan bool)
+	c.cmdChans[id] = make(chan bool, 1)
 	c.mut.Unlock()
 
 	return c.cmdChans[id], true
