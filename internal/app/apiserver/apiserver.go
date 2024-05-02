@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/a-schus/REST-API/internal/app/cmdexec"
 	"github.com/a-schus/REST-API/internal/app/store"
-	"github.com/lib/pq"
 )
 
 type APIServer struct {
@@ -39,7 +39,7 @@ func (s *APIServer) Start() {
 	mux.HandleFunc("/close", s.closeHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
 	mux.HandleFunc("/cmd", s.cmdHandler)
-	mux.HandleFunc("/new", s.newHandler)
+	mux.HandleFunc("/new", s.newScriptHandler)
 	mux.HandleFunc("/exec", s.execHandler)
 
 	s.server.Handler = mux
@@ -120,10 +120,17 @@ func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 			// w.Write([]byte(err.Error()))
 			// w.WriteHeader(http.StatusInternalServerError)
 		} else {
-			response += ":\t"
-			for _, cmd := range cmds {
-				response += cmd + "; "
+			t := strings.Builder{}
+			t.WriteString("\n")
+			for range response {
+				t.WriteString("-")
 			}
+			t.WriteString("\n")
+
+			response += t.String() + cmds
+			// for _, cmd := range cmds {
+			// 	response += cmd + "; "
+			// }
 			w.Write([]byte(response + "\n"))
 			// w.WriteHeader(http.StatusOK)
 		}
@@ -171,7 +178,7 @@ func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
 		splitter = "@@"
 	}
 
-	cmds := pq.StringArray(strings.Split(cmd, splitter))
+	cmds := strings.Join(strings.Split(cmd, splitter), "\n")
 
 	err := s.db.NewCommand(name, desc, cmds)
 	if err != nil {
@@ -182,25 +189,142 @@ func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 }
+func (s *APIServer) newScriptHandler(w http.ResponseWriter, req *http.Request) {
 
+	/*
+		Формат POST запроса curl, содержащего файл bash-скрипта
+		curl -X POST http://localhost:8080/new -F File=@/home/schus/go/src/github.com/a-schus/REST-API/scr.sh -F name=7 -F desc=Com+Desc
+	*/
+
+	// params, _ := url.ParseQuery(req.URL.RawQuery)
+	var name, desc string
+
+	// name = params.Get("name")
+	// desc = params.Get("desc")
+	// if name == "" {
+	// 	http.Error(w, "Command name can't be empty", http.StatusBadRequest)
+	// 	return
+	// }
+
+	req.ParseMultipartForm(1024)
+	name = req.FormValue("name")
+	desc = req.FormValue("desc")
+	cmds, _, _ := req.FormFile("File") // Получить отсюда скрипт!!!
+	fmt.Printf("%v\n", cmds)
+	cmd := ""
+
+	contLen := req.ContentLength
+	if contLen > 0 {
+		body, _ := io.ReadAll(req.Body)
+		script := strings.Split(string(body), "\r\n")
+
+		cmd = strings.Join(script[4:len(script)-2], "")
+		cmd = cmd[:len(cmd)-1]
+
+		err := s.db.NewCommand(name, desc, cmd)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	} else {
+		http.Error(w, "Script non found", http.StatusBadRequest)
+	}
+
+}
+
+// func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
+
+// 	/* Формат POST запроса curl, содержащего новую команду в теле
+// 	curl -X POST -json -d '{
+// 		"name": "date",
+// 		"desc": "Show current date",
+// 		"cmd": "echo \"Current date: \";date"
+// 	}' http://localhost:8080/new
+// 	*/
+
+// 	params, _ := url.ParseQuery(req.URL.RawQuery)
+// 	var name, desc, cmd, splitter string
+
+// 	contLen := req.ContentLength
+// 	// Если запрос содержит тело, аргументы, переданные через URL игнорируются
+// 	if contLen > 0 {
+// 		contByte := make([]byte, contLen)
+// 		req.Body.Read(contByte)
+
+// 		args := Args{}
+
+// 		e := json.Unmarshal(contByte, &args)
+// 		fmt.Println(e)
+
+// 		name = args.Name
+// 		desc = args.Desc
+// 		cmd = args.Cmd
+// 		splitter = ";"
+// 	} else {
+// 		name = params.Get("name")
+// 		desc = params.Get("desc")
+// 		cmd = params.Get("cmd")
+// 		splitter = "@@"
+// 	}
+
+// 	cmds := pq.StringArray(strings.Split(cmd, splitter))
+
+// 	err := s.db.NewCommand(name, desc, cmds)
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		// w.Write([]byte(err.Error()))
+// 	} else {
+// 		// w.Write([]byte("Ok!"))
+// 		w.WriteHeader(http.StatusOK)
+// 	}
+// }
+
+// func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
+// 	params, _ := url.ParseQuery(req.URL.RawQuery)
+// 	name := params.Get("name")
+// 	_, cmd, err := s.db.GetCommand(name)
+
+//		if err != nil {
+//			http.Error(w, "Bad request", http.StatusBadRequest)
+//			// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
+//			// w.Write([]byte(err.Error()))
+//			// w.WriteHeader(http.StatusBadRequest)
+//		} else {
+//			if len(cmd) == 1 {
+//				cmdexec.Exec(cmd[0], w)
+//			} else if len(cmd) > 1 {
+//				ch := make(chan (bool))
+//				go cmdexec.ExecLong(name, cmd, s.db, w, ch)
+//				<-ch // ждем, сообщения о запуске долгой команды
+//			}
+//			// w.WriteHeader(http.StatusOK)
+//		}
+//	}
 func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
+	// params, _ := url.ParseQuery(req.URL.RawQuery)
+	// name := params.Get("name")
+	// _, cmd, err := s.db.GetCommand(name)
+
+	// if err != nil {
+	// 	http.Error(w, "Bad request", http.StatusBadRequest)
+	// 	// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
+	// 	// w.Write([]byte(err.Error()))
+	// 	// w.WriteHeader(http.StatusBadRequest)
+	// } else {
+	// 	if len(cmd) == 1 {
+	// 		cmdexec.Exec(cmd[0], w)
+	// 	} else if len(cmd) > 1 {
+	// 		ch := make(chan (bool))
+	// 		go cmdexec.ExecLong(name, cmd, s.db, w, ch)
+	// 		<-ch // ждем, сообщения о запуске долгой команды
+	// 	}
+	// 	// w.WriteHeader(http.StatusOK)
+	// }
+
 	params, _ := url.ParseQuery(req.URL.RawQuery)
 	name := params.Get("name")
-	_, cmd, err := s.db.GetCommand(name)
+	_, cmd, _ := s.db.GetCommand(name)
 
-	if err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
-		// w.Write([]byte(err.Error()))
-		// w.WriteHeader(http.StatusBadRequest)
-	} else {
-		if len(cmd) == 1 {
-			cmdexec.Exec(cmd[0], w)
-		} else if len(cmd) > 1 {
-			ch := make(chan (bool))
-			go cmdexec.ExecLong(name, cmd, s.db, w, ch)
-			<-ch // ждем, сообщения о запуске долгой команды
-		}
-		// w.WriteHeader(http.StatusOK)
-	}
+	cmdexec.ExecScript(name, cmd, s.db, w)
 }
