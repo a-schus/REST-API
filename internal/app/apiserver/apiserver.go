@@ -2,9 +2,7 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -36,7 +34,7 @@ func New(ip string, _db *store.Store) *APIServer {
 
 func (s *APIServer) Start() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/close", s.closeHandler)
+	mux.HandleFunc("/shutdown", s.shutdownHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
 	mux.HandleFunc("/cmd", s.cmdHandler)
 	mux.HandleFunc("/new", s.newScriptHandler)
@@ -69,7 +67,7 @@ func (s *APIServer) Start() {
 	}
 }
 
-func (s *APIServer) closeHandler(w http.ResponseWriter, req *http.Request) {
+func (s *APIServer) shutdownHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Received %v request", req.RequestURI)
 	pid := os.Getpid()
 	proc, _ := os.FindProcess(pid)
@@ -102,23 +100,16 @@ func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 		// если URL без параметров
 		if response, err := s.db.GetAllCommands(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error"))
-			// w.Write([]byte(err.Error()))
-			// w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			w.Header().Set("Content-Type", "text/plain")
 			for _, row := range response {
 				w.Write([]byte(row))
 			}
-			// w.WriteHeader(http.StatusOK)
 		}
 	} else {
 		// если URL с параметром
 		if response, cmds, err := s.db.GetCommand(command); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusInternalServerError) + " Internal Server Error\n"))
-			// w.Write([]byte(err.Error()))
-			// w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			t := strings.Builder{}
 			t.WriteString("\n")
@@ -128,67 +119,11 @@ func (s *APIServer) cmdHandler(w http.ResponseWriter, req *http.Request) {
 			t.WriteString("\n")
 
 			response += t.String() + cmds
-			// for _, cmd := range cmds {
-			// 	response += cmd + "; "
-			// }
 			w.Write([]byte(response + "\n"))
-			// w.WriteHeader(http.StatusOK)
 		}
 	}
 }
 
-type Args struct {
-	Name string `json:"name"`
-	Desc string `json:"desc"`
-	Cmd  string `json:"cmd"`
-}
-
-func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
-
-	/* Формат POST запроса curl, содержащего новую команду в теле
-	curl -X POST -json -d '{
-		"name": "date",
-		"desc": "Show current date",
-		"cmd": "echo \"Current date: \";date"
-	}' http://localhost:8080/new
-	*/
-
-	params, _ := url.ParseQuery(req.URL.RawQuery)
-	var name, desc, cmd, splitter string
-
-	contLen := req.ContentLength
-	// Если запрос содержит тело, аргументы, переданные через URL игнорируются
-	if contLen > 0 {
-		contByte := make([]byte, contLen)
-		req.Body.Read(contByte)
-
-		args := Args{}
-
-		e := json.Unmarshal(contByte, &args)
-		fmt.Println(e)
-
-		name = args.Name
-		desc = args.Desc
-		cmd = args.Cmd
-		splitter = ";"
-	} else {
-		name = params.Get("name")
-		desc = params.Get("desc")
-		cmd = params.Get("cmd")
-		splitter = "@@"
-	}
-
-	cmds := strings.Join(strings.Split(cmd, splitter), "\n")
-
-	err := s.db.NewCommand(name, desc, cmds)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		// w.Write([]byte(err.Error()))
-	} else {
-		// w.Write([]byte("Ok!"))
-		w.WriteHeader(http.StatusOK)
-	}
-}
 func (s *APIServer) newScriptHandler(w http.ResponseWriter, req *http.Request) {
 
 	/*
@@ -196,42 +131,99 @@ func (s *APIServer) newScriptHandler(w http.ResponseWriter, req *http.Request) {
 		curl -X POST http://localhost:8080/new -F File=@/home/schus/go/src/github.com/a-schus/REST-API/scr.sh -F name=7 -F desc=Com+Desc
 	*/
 
-	// params, _ := url.ParseQuery(req.URL.RawQuery)
-	var name, desc string
+	var name, desc, cmd string
 
-	// name = params.Get("name")
-	// desc = params.Get("desc")
-	// if name == "" {
-	// 	http.Error(w, "Command name can't be empty", http.StatusBadRequest)
-	// 	return
-	// }
-
-	req.ParseMultipartForm(1024)
-	name = req.FormValue("name")
-	desc = req.FormValue("desc")
-	cmds, _, _ := req.FormFile("File") // Получить отсюда скрипт!!!
-	fmt.Printf("%v\n", cmds)
-	cmd := ""
-
-	contLen := req.ContentLength
-	if contLen > 0 {
-		body, _ := io.ReadAll(req.Body)
-		script := strings.Split(string(body), "\r\n")
-
-		cmd = strings.Join(script[4:len(script)-2], "")
-		cmd = cmd[:len(cmd)-1]
-
-		err := s.db.NewCommand(name, desc, cmd)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
-	} else {
-		http.Error(w, "Script non found", http.StatusBadRequest)
+	if err := req.ParseMultipartForm(10240); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
+	name = req.FormValue("name")
+	desc = req.FormValue("desc")
+
+	if file, _, err := req.FormFile("File"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else {
+		binFile, err := io.ReadAll(file)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		cmd = string(binFile)
+	}
+
+	err := s.db.NewCommand(name, desc, cmd)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	} else {
+		w.Write([]byte("Ok!\n"))
+	}
 }
+
+func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	name := params.Get("name")
+	_, cmd, err := s.db.GetCommand(name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	} else {
+		cmdexec.ExecScript(name, cmd, s.db, w)
+	}
+}
+
+// type Args struct {
+// 	Name string `json:"name"`
+// 	Desc string `json:"desc"`
+// 	Cmd  string `json:"cmd"`
+// }
+
+// func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
+
+// 	/* Формат POST запроса curl, содержащего новую команду в теле
+// 	curl -X POST -json -d '{
+// 		"name": "date",
+// 		"desc": "Show current date",
+// 		"cmd": "echo \"Current date: \";date"
+// 	}' http://localhost:8080/new
+// 	*/
+
+// 	params, _ := url.ParseQuery(req.URL.RawQuery)
+// 	var name, desc, cmd, splitter string
+
+// 	contLen := req.ContentLength
+// 	// Если запрос содержит тело, аргументы, переданные через URL игнорируются
+// 	if contLen > 0 {
+// 		contByte := make([]byte, contLen)
+// 		req.Body.Read(contByte)
+
+// 		args := Args{}
+
+// 		e := json.Unmarshal(contByte, &args)
+// 		fmt.Println(e)
+
+// 		name = args.Name
+// 		desc = args.Desc
+// 		cmd = args.Cmd
+// 		splitter = ";"
+// 	} else {
+// 		name = params.Get("name")
+// 		desc = params.Get("desc")
+// 		cmd = params.Get("cmd")
+// 		splitter = "@@"
+// 	}
+
+// 	cmds := strings.Join(strings.Split(cmd, splitter), "\n")
+
+//		err := s.db.NewCommand(name, desc, cmds)
+//		if err != nil {
+//			http.Error(w, err.Error(), http.StatusBadRequest)
+//			// w.Write([]byte(err.Error()))
+//		} else {
+//			w.Write([]byte("Ok!"))
+//			// w.WriteHeader(http.StatusOK)
+//		}
+//	}
 
 // func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
 
@@ -301,30 +293,3 @@ func (s *APIServer) newScriptHandler(w http.ResponseWriter, req *http.Request) {
 //			// w.WriteHeader(http.StatusOK)
 //		}
 //	}
-func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
-	// params, _ := url.ParseQuery(req.URL.RawQuery)
-	// name := params.Get("name")
-	// _, cmd, err := s.db.GetCommand(name)
-
-	// if err != nil {
-	// 	http.Error(w, "Bad request", http.StatusBadRequest)
-	// 	// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
-	// 	// w.Write([]byte(err.Error()))
-	// 	// w.WriteHeader(http.StatusBadRequest)
-	// } else {
-	// 	if len(cmd) == 1 {
-	// 		cmdexec.Exec(cmd[0], w)
-	// 	} else if len(cmd) > 1 {
-	// 		ch := make(chan (bool))
-	// 		go cmdexec.ExecLong(name, cmd, s.db, w, ch)
-	// 		<-ch // ждем, сообщения о запуске долгой команды
-	// 	}
-	// 	// w.WriteHeader(http.StatusOK)
-	// }
-
-	params, _ := url.ParseQuery(req.URL.RawQuery)
-	name := params.Get("name")
-	_, cmd, _ := s.db.GetCommand(name)
-
-	cmdexec.ExecScript(name, cmd, s.db, w)
-}

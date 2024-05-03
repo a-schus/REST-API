@@ -1,4 +1,4 @@
 #!/bin/bash
 echo "Current date: "
-date
+    date
 echo "Done!"

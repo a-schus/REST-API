@@ -68,7 +68,7 @@ func (s *Store) initEmptyDB() error {
 		return err
 	}
 
-	_, err = s.db.Exec("CREATE SEQUENCE IF NOT EXISTS long_comm_id start 1")
+	_, err = s.db.Exec("CREATE SEQUENCE IF NOT EXISTS comm_id start 1")
 	if err != nil {
 		fmt.Printf("CREATE SEQUENCE error: %v\n", err)
 		return err
@@ -123,7 +123,7 @@ func (s *Store) NewCommand(name string, desc string, cmds string) error {
 }
 
 func (s *Store) GetNextID() int {
-	rows, _ := s.db.Query("SELECT nextval('long_comm_id')")
+	rows, _ := s.db.Query("SELECT nextval('comm_id')")
 	defer rows.Close()
 	rows.Next()
 	var id int

@@ -11,19 +11,19 @@ import (
 	"github.com/a-schus/REST-API/internal/app/store"
 )
 
-func ExecScript(name string, script string, db *store.Store, w http.ResponseWriter) error {
+func ExecScript(name string, script string, db *store.Store, w http.ResponseWriter) {
 	outBuf := new(strings.Builder)
 	c := exec.Command("bash", "-c", script)
 	c.Stdout = outBuf
 	err := c.Run()
-	if err == nil {
-		w.Write([]byte(outBuf.String()))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	} else {
 		d := strings.Split(outBuf.String(), "\n")
 		d = d[:len(d)-1]
 		db.WriteLog(db.GetNextID(), name, script, strings.Join(d, "\n"))
+		w.Write([]byte(outBuf.String()))
 	}
-
-	return err
 }
 
 // func Exec(cmd string, w http.ResponseWriter) {
