@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -39,6 +40,7 @@ func (s *APIServer) Start() {
 	mux.HandleFunc("/cmd", s.cmdHandler)
 	mux.HandleFunc("/new", s.newScriptHandler)
 	mux.HandleFunc("/exec", s.execHandler)
+	mux.HandleFunc("/execlong", s.execLongHandler)
 
 	s.server.Handler = mux
 
@@ -170,6 +172,33 @@ func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		cmdexec.ExecScript(name, cmd, s.db, w)
 	}
+}
+
+func (s *APIServer) execLongHandler(w http.ResponseWriter, req *http.Request) {
+	id := s.db.GetNextID()
+	w.Write([]byte("Long command ID " + fmt.Sprint(id) + " is runing\n"))
+	go func() {
+		params, _ := url.ParseQuery(req.URL.RawQuery)
+		name := params.Get("name")
+		_, cmd, err := s.db.GetCommand(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			ctx, cansel := context.WithCancel(context.Background())
+			defer cansel()
+
+			doneCh := make(chan bool, 1)
+			s.db.WriteLog(id, name, cmd, "Long command "+fmt.Sprintf("%d", id)+" is runing")
+
+			go cmdexec.ExecLongScript(ctx, doneCh, id, name, cmd, s.db, w)
+			ok := <-doneCh
+			if ok {
+				s.db.WriteLog(id, name, cmd, "Long command "+fmt.Sprintf("%d", id)+" is done")
+			} else {
+				s.db.WriteLog(id, name, cmd, "Long command "+fmt.Sprintf("%d", id)+" stoped by user")
+			}
+		}
+	}()
 }
 
 // type Args struct {

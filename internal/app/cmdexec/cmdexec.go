@@ -1,6 +1,7 @@
 package cmdexec
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +11,56 @@ import (
 
 	"github.com/a-schus/REST-API/internal/app/store"
 )
+
+type LogWriter struct {
+	Log    []string
+	db     *store.Store
+	commID int
+	name   string
+}
+
+func newLogWriter(_db *store.Store, _commID int, _name string) *LogWriter {
+	return &LogWriter{
+		db:     _db,
+		commID: _commID,
+		name:   _name,
+	}
+}
+func (l *LogWriter) Write(p []byte) (n int, err error) {
+	log.Println(string(p))
+	if len(p) > 0 {
+		l.db.WriteLog(l.commID, l.name, "", string(p))
+	}
+	l.Log = append(l.Log, string(p))
+	return len(p), nil
+}
+
+func (l *LogWriter) String() string {
+	return strings.Join(l.Log, "")
+}
+
+func ExecLongScript(ctx context.Context, doneCh chan bool, id int, name string, script string, db *store.Store, w http.ResponseWriter) {
+	cmdChans.Add(id, doneCh)
+	defer cmdChans.Remove(id)
+
+	// db.WriteLog(id, name, script, "Long command is runing")
+	outBuf := newLogWriter(db, id, name)
+	errBuf := newLogWriter(db, id, name)
+	c := exec.CommandContext(ctx, "bash", "-c", script)
+	c.Stdout = outBuf
+	c.Stderr = errBuf
+	/*err := */ c.Run()
+	// db.WriteLog(id, name, script, "Long command is done")
+	doneCh <- true
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusBadRequest)
+	// } else {
+	// 	d := outBuf.String()
+	// 	d = d[:len(d)-1]
+	// 	db.WriteLog(id, name, script, d)
+	// 	w.Write([]byte(outBuf.String()))
+	// }
+}
 
 func ExecScript(name string, script string, db *store.Store, w http.ResponseWriter) {
 	outBuf := new(strings.Builder)
@@ -25,6 +76,55 @@ func ExecScript(name string, script string, db *store.Store, w http.ResponseWrit
 		w.Write([]byte(outBuf.String()))
 	}
 }
+
+// type ctxId struct {
+// 	mut      sync.Mutex
+// 	cmdCtx map[int]context.Context
+// }
+
+// var cmdCtx = NewCtxId()
+
+// func NewCtxId() ctxId {
+// 	ctx := make(map[int]context.Context)
+// 	return ctxId{
+// 		cmdCtx: ctx,
+// 	}
+// }
+
+// func (c *ctxId) Add(ctx context.Context, id int) bool {
+// 	res := true
+// 	c.mut.Lock()
+// 	if _, ok := c.cmdCtx[id]; !ok {
+// 		res = false
+// 	}
+// 	c.cmdCtx[id] = ctx
+// 	c.mut.Unlock()
+
+// 	return res
+// }
+
+// func (c *ctxId) Remove(id int) bool {
+// 	res := true
+// 	c.mut.Lock()
+// 	if _, ok := c.cmdCtx[id]; !ok {
+// 		res = false
+// 	} else {
+// 		delete(c.cmdCtx, id)
+// 	}
+// 	c.mut.Unlock()
+
+// 	return res
+// }
+
+// func Stop(id int, w http.ResponseWriter) {
+// 	if ctx, ok := cmdCtx.cmdCtx[id]; ok {
+// 		ctx.Done()
+// 		w.Write([]byte("Long command ID " + fmt.Sprint(id) + " stoped\n"))
+// 	} else {
+// 		w.Write([]byte("Long command ID " + fmt.Sprint(id) + " not runing\n"))
+// 		log.Printf("exec: Long command ID %d not runing\n", id)
+// 	}
+// }
 
 // func Exec(cmd string, w http.ResponseWriter) {
 // 	// Если команда короткая, просто выполняем ее и отправляем результат
@@ -88,7 +188,7 @@ func ExecScript(name string, script string, db *store.Store, w http.ResponseWrit
 // Останавливает команду по переданному ID
 func Stop(id int, w http.ResponseWriter) {
 	if ch, ok := cmdChans.cmdChans[id]; ok {
-		ch <- true
+		ch <- false
 		w.Write([]byte("Long command ID " + fmt.Sprint(id) + " stoped\n"))
 	} else {
 		w.Write([]byte("Long command ID " + fmt.Sprint(id) + " not runing\n"))
@@ -111,15 +211,16 @@ func NewChanId() chanId {
 	}
 }
 
-func (c *chanId) Add(id int) (chan bool, bool) {
+func (c *chanId) Add(id int, ch chan bool) bool {
+	res := true
 	c.mut.Lock()
 	if _, err := c.cmdChans[id]; err {
-		return nil, false
+		res = false
 	}
-	c.cmdChans[id] = make(chan bool, 1)
+	c.cmdChans[id] = ch
 	c.mut.Unlock()
 
-	return c.cmdChans[id], true
+	return res
 }
 
 func (c *chanId) Remove(id int) bool {
