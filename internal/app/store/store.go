@@ -33,14 +33,18 @@ func init() {
 	}
 }
 
-func (s *Store) Open() error {
+func (s *Store) Open(args ...string) error {
+	if len(args) > 0 {
+		conf.name = args[0]
+	}
+
 	db, _ := sql.Open("postgres", "user="+conf.user+" password="+conf.pass+" host="+conf.host+" dbname="+conf.name+" sslmode=disable")
 
 	err := db.Ping()
 	if err != nil {
 		fmt.Printf("DB open error: %v\n", err)
-		if fmt.Sprintf("%s", err) == "pq: database \"restapi_dev\" does not exist" {
-			fmt.Println("Create empty database 'restapi_dev' and try again")
+		if fmt.Sprintf("%s", err) == "pq: database \""+conf.name+"\" does not exist" {
+			fmt.Println("Create empty database \"" + conf.name + "\" and try again")
 		}
 		return err
 	}
@@ -118,7 +122,11 @@ func (s *Store) GetCommand(name string) (description string, commands string, e 
 }
 
 func (s *Store) NewCommand(name string, desc string, cmds string) error {
-	_, err := s.db.Exec("INSERT INTO Commands (name, description, command) VALUES ($1, $2, $3)", name, desc, cmds)
+	var nullName = sql.NullString{
+		String: name,
+		Valid:  name != "",
+	}
+	_, err := s.db.Exec("INSERT INTO Commands (name, description, command) VALUES ($1, $2, $3)", nullName, desc, cmds)
 	return err
 }
 
