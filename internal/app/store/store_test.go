@@ -32,6 +32,7 @@ func TestMain(m *testing.M) {
 	res := m.Run()
 
 	clearDB(store.db)
+	store.Close()
 
 	os.Exit(res)
 }
