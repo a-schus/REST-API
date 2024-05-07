@@ -149,3 +149,17 @@ func (s *Store) WriteLog(commID int, name string, cmd string, res string) {
 		fmt.Printf("Write LOG error: %s\n", err.Error())
 	}
 }
+
+// clearDB() используется для тестирования
+func clearDB(db *sql.DB) {
+	db.Exec("DROP TABLE IF EXISTS Commands;")
+	db.Exec("DROP TABLE IF EXISTS Log;")
+	db.Exec("DROP SEQUENCE IF EXISTS comm_id;")
+}
+
+// clearTables() используется для тестирования
+func clearTables(db *sql.DB) {
+	db.Exec("DELETE FROM Commands;")
+	db.Exec("DELETE FROM Log;")
+	db.Exec("ALTER SEQUENCE comm_id RESTART WITH 1;")
+}
