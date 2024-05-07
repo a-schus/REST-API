@@ -4,6 +4,6 @@ build:
 
 .PHONY: test
 test:
-		go test -v ./...
+		go test -v ./internal/app/store -args -n schus -p 19schus78
 
 .DEFAULT_GOAL := build

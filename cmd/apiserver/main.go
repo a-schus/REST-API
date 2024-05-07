@@ -12,12 +12,22 @@ import (
 
 func main() {
 	ip := flag.String("ip", "localhost:8080", "IP")
+	user := flag.String("n", "postgres", "User name")
+	pass := flag.String("p", "1234", "User password")
+	host := flag.String("dbip", "localhost", "Database server IP")
 
 	flag.Parse()
 
+	conf := store.DBConf{
+		User: *user,
+		Pass: *pass,
+		Host: *host,
+		Name: "restapi_test",
+	}
+
 	db := store.Store{}
 
-	if db.Open() != nil {
+	if db.Open(conf) != nil {
 		return
 	}
 	defer db.Close()

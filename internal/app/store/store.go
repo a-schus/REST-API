@@ -12,39 +12,35 @@ var databaseURL = "user=postgres password=1234 host=localhost dbname=restapi_dev
 var defaultDatabaseURL = "user=postgres password=1234 host=localhost dbname=postgres sslmode=disable"
 
 type DBConf struct {
-	user string
-	pass string
-	host string
-	name string
+	User string
+	Pass string
+	Host string
+	Name string
 }
 
-var conf DBConf
+// var conf DBConf
 
 type Store struct {
 	db *sql.DB
 }
 
-func init() {
-	conf = DBConf{
-		user: "schus",
-		pass: "19schus78",
-		host: "localhost",
-		name: "restapi_dev",
-	}
-}
+// func init() {
+// 	conf = DBConf{
+// 		user: "schus",
+// 		pass: "19schus78",
+// 		host: "localhost",
+// 		name: "restapi_dev",
+// 	}
+// }
 
-func (s *Store) Open(args ...string) error {
-	if len(args) > 0 {
-		conf.name = args[0]
-	}
-
-	db, _ := sql.Open("postgres", "user="+conf.user+" password="+conf.pass+" host="+conf.host+" dbname="+conf.name+" sslmode=disable")
+func (s *Store) Open(conf DBConf) error {
+	db, _ := sql.Open("postgres", "user="+conf.User+" password="+conf.Pass+" host="+conf.Host+" dbname="+conf.Name+" sslmode=disable")
 
 	err := db.Ping()
 	if err != nil {
 		fmt.Printf("DB open error: %v\n", err)
-		if fmt.Sprintf("%s", err) == "pq: database \""+conf.name+"\" does not exist" {
-			fmt.Println("Create empty database \"" + conf.name + "\" and try again")
+		if fmt.Sprintf("%s", err) == "pq: database \""+conf.Name+"\" does not exist" {
+			fmt.Println("Create empty database \"" + conf.Name + "\" and try again")
 		}
 		return err
 	}

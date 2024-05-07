@@ -1,6 +1,7 @@
 package store
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -15,10 +16,20 @@ type cmd struct {
 }
 
 func TestMain(m *testing.M) {
+	user := flag.String("n", "postgres", "User name")
+	pass := flag.String("p", "1234", "User password")
+	host := flag.String("dbip", "localhost", "Database server IP")
+	flag.Parse()
+	conf := DBConf{
+		User: *user,
+		Pass: *pass,
+		Host: *host,
+		Name: "restapi_test",
+	}
+
 	fmt.Println("=== RUN   tests for store.go")
 	store = Store{}
-	conf.name = "restapi_test"
-	if store.Open() != nil {
+	if store.Open(conf) != nil {
 		return
 	}
 
