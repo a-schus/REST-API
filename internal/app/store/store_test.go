@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var store Store
+var st Store
 
 type cmd struct {
 	name string
@@ -28,17 +28,19 @@ func TestMain(m *testing.M) {
 	}
 
 	fmt.Println("=== RUN   tests for store.go")
-	store = Store{}
-	if store.Open(conf) != nil {
+	st = Store{}
+	if st.Open(conf) != nil {
 		return
 	}
 
-	clearTables(store.db) //на всякий случай очищаем таблицы в тестовой базе
+	//Очищаем базу перед началом тестов на случай, если в предыдущий раз тесты завершились аварийно
+	clearDB(st.db)
+	st.initEmptyDB()
 
 	res := m.Run()
 
-	clearDB(store.db)
-	store.Close()
+	clearDB(st.db)
+	st.Close()
 
 	os.Exit(res)
 }
@@ -66,7 +68,7 @@ func TestNewCommand(t *testing.T) {
 	}
 
 	for _, tCase := range testCases {
-		err := store.NewCommand(tCase.input.name, tCase.input.desc, tCase.input.cmds)
+		err := st.NewCommand(tCase.input.name, tCase.input.desc, tCase.input.cmds)
 
 		if (err == nil) != tCase.ok {
 			t.Errorf("Wrong Ok status: %v. Want %v, have %v", tCase.input, tCase.ok, err == nil)
@@ -74,22 +76,22 @@ func TestNewCommand(t *testing.T) {
 
 		if err == nil {
 			var out cmd
-			row := store.db.QueryRow("SELECT name, description, command FROM Commands WHERE name = $1", tCase.input.name)
+			row := st.db.QueryRow("SELECT name, description, command FROM Commands WHERE name = $1", tCase.input.name)
 			row.Scan(&out.name, &out.desc, &out.cmds)
 			if tCase.input != out {
 				t.Errorf("Wrong result: %v", tCase.input)
 			}
 		}
 	}
-	clearTables(store.db)
+	clearTables(st.db)
 }
 
 func TestGetAllCommands(t *testing.T) {
-	store.NewCommand("Com 1", "New command", "echo \"script 1\"")
-	if _, err := store.GetAllCommands(); err != nil {
+	st.NewCommand("Com 1", "New command", "echo \"script 1\"")
+	if _, err := st.GetAllCommands(); err != nil {
 		t.Errorf("Wrong Ok status: %v", err == nil)
 	}
-	clearTables(store.db)
+	clearTables(st.db)
 }
 
 func TestGetCommand(t *testing.T) {
@@ -110,11 +112,11 @@ func TestGetCommand(t *testing.T) {
 		cmds: "echo \"script 1\"",
 	}
 
-	store.NewCommand("Com 1", "New command", "echo \"script 1\"")
+	st.NewCommand("Com 1", "New command", "echo \"script 1\"")
 	for _, tCase := range testCases {
 		var out cmd
 		var err error
-		out.desc, out.cmds, err = store.GetCommand(tCase.input.name)
+		out.desc, out.cmds, err = st.GetCommand(tCase.input.name)
 
 		if (err == nil) != tCase.ok {
 			t.Errorf("Wrong Ok status: %v. Want %v, have %v", tCase.input, tCase.ok, err == nil)
@@ -124,7 +126,7 @@ func TestGetCommand(t *testing.T) {
 			t.Errorf("Wrong result: %v", tCase.input)
 		}
 	}
-	clearTables(store.db)
+	clearTables(st.db)
 }
 
 func TestGetNextID(t *testing.T) {
@@ -137,11 +139,11 @@ func TestGetNextID(t *testing.T) {
 		{false, 4},
 	}
 	for _, tCase := range testCases {
-		if id := store.GetNextID(); (id == tCase.want) != tCase.ok {
+		if id := st.GetNextID(); (id == tCase.want) != tCase.ok {
 			t.Errorf("Wrong Ok status: %v. Want %v, have %v", tCase.want, tCase.ok, id == tCase.want)
 		}
 	}
-	clearTables(store.db)
+	clearTables(st.db)
 }
 
 func TestWriteLog(t *testing.T) {
@@ -159,13 +161,13 @@ func TestWriteLog(t *testing.T) {
 	}
 	var outLog Log
 
-	store.WriteLog(wantLog.commID, wantLog.name, wantLog.cmd, wantLog.res)
-	row := store.db.QueryRow("SELECT comm_id, name, command, result FROM log WHERE comm_id = $1", wantLog.commID)
+	st.WriteLog(wantLog.commID, wantLog.name, wantLog.cmd, wantLog.res)
+	row := st.db.QueryRow("SELECT comm_id, name, command, result FROM log WHERE comm_id = $1", wantLog.commID)
 	row.Scan(&outLog.commID, &outLog.name, &outLog.cmd, &outLog.res)
 
 	if wantLog != outLog {
 		t.Errorf("Wrong result: \nwant %v, \nhave %v", wantLog, outLog)
 	}
 
-	clearTables(store.db)
+	clearTables(st.db)
 }
