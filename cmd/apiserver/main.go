@@ -12,8 +12,8 @@ import (
 
 func main() {
 	ip := flag.String("ip", "localhost:8080", "IP")
-	user := flag.String("n", "postgres", "User name")
-	pass := flag.String("p", "1234", "User password")
+	user := flag.String("n", "schus", "User name")
+	pass := flag.String("p", "19schus78", "User password")
 	host := flag.String("dbip", "localhost", "Database server IP")
 
 	flag.Parse()
