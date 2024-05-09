@@ -159,7 +159,7 @@ func (s *APIServer) newScriptHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	} else {
-		w.Write([]byte("Ok!\n"))
+		w.Write([]byte("Command added\n"))
 	}
 }
 

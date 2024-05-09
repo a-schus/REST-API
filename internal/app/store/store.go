@@ -135,7 +135,7 @@ func (s *Store) GetNextID() int {
 	return id
 }
 
-func (s *Store) WriteLog(commID int, name string, cmd string, res string) {
+func (s *Store) WriteLog(commID int, name string, cmd string, res string) error {
 	now := pq.NullTime{
 		Time:  time.Now(),
 		Valid: true,
@@ -143,7 +143,9 @@ func (s *Store) WriteLog(commID int, name string, cmd string, res string) {
 	_, err := s.db.Exec("INSERT INTO log (time, comm_id, name, command, result) VALUES ($1, $2, $3, $4, $5)", now, commID, name, cmd, res)
 	if err != nil {
 		fmt.Printf("Write LOG error: %s\n", err.Error())
+		return err
 	}
+	return nil
 }
 
 // clearDB() используется для тестирования

@@ -28,11 +28,12 @@ func newLogWriter(_db *store.Store, _commID int, _name string) *LogWriter {
 }
 func (l *LogWriter) Write(p []byte) (n int, err error) {
 	log.Println(string(p))
+
 	if len(p) > 0 {
-		l.db.WriteLog(l.commID, l.name, "", string(p))
+		err = l.db.WriteLog(l.commID, l.name, "", string(p))
 	}
 	l.Log = append(l.Log, string(p))
-	return len(p), nil
+	return len(p), err
 }
 
 func (l *LogWriter) String() string {

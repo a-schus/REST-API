@@ -22,7 +22,7 @@ func main() {
 		User: *user,
 		Pass: *pass,
 		Host: *host,
-		Name: "restapi_test",
+		Name: "restapi_dev",
 	}
 
 	db := store.Store{}
