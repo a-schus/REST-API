@@ -34,12 +34,12 @@ func TestMain(m *testing.M) {
 	}
 
 	//Очищаем базу перед началом тестов на случай, если в предыдущий раз тесты завершились аварийно
-	clearDB(st.db)
-	st.initEmptyDB()
+	ClearDB(st.db)
+	st.InitEmptyDB()
 
 	res := m.Run()
 
-	clearDB(st.db)
+	ClearDB(st.db)
 	st.Close()
 
 	os.Exit(res)
@@ -83,7 +83,7 @@ func TestNewCommand(t *testing.T) {
 			}
 		}
 	}
-	clearTables(st.db)
+	ClearTables(st.db)
 }
 
 func TestGetAllCommands(t *testing.T) {
@@ -91,7 +91,7 @@ func TestGetAllCommands(t *testing.T) {
 	if _, err := st.GetAllCommands(); err != nil {
 		t.Errorf("Wrong Ok status: %v", err == nil)
 	}
-	clearTables(st.db)
+	ClearTables(st.db)
 }
 
 func TestGetCommand(t *testing.T) {
@@ -126,7 +126,7 @@ func TestGetCommand(t *testing.T) {
 			t.Errorf("Wrong result: %v", tCase.input)
 		}
 	}
-	clearTables(st.db)
+	ClearTables(st.db)
 }
 
 func TestGetNextID(t *testing.T) {
@@ -143,7 +143,7 @@ func TestGetNextID(t *testing.T) {
 			t.Errorf("Wrong Ok status: %v. Want %v, have %v", tCase.want, tCase.ok, id == tCase.want)
 		}
 	}
-	clearTables(st.db)
+	ClearTables(st.db)
 }
 
 func TestWriteLog(t *testing.T) {
@@ -169,5 +169,5 @@ func TestWriteLog(t *testing.T) {
 		t.Errorf("Wrong result: \nwant %v, \nhave %v", wantLog, outLog)
 	}
 
-	clearTables(st.db)
+	ClearTables(st.db)
 }

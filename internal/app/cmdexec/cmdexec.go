@@ -27,7 +27,7 @@ func newLogWriter(_db *store.Store, _commID int, _name string) *LogWriter {
 	}
 }
 func (l *LogWriter) Write(p []byte) (n int, err error) {
-	log.Println(string(p))
+	// log.Println(string(p))
 
 	if len(p) > 0 {
 		err = l.db.WriteLog(l.commID, l.name, "", string(p))
@@ -67,6 +67,7 @@ func ExecScript(name string, script string, db *store.Store, w http.ResponseWrit
 	outBuf := new(strings.Builder)
 	c := exec.Command("bash", "-c", script)
 	c.Stdout = outBuf
+	c.Stderr = outBuf
 	err := c.Run()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
