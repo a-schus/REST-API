@@ -70,25 +70,12 @@ func (s *APIServer) Start() {
 }
 
 func (s *APIServer) shutdownHandler(w http.ResponseWriter, req *http.Request) {
-	log.Printf("Received %v request", req.RequestURI)
+	// log.Printf("Received %v request", req.RequestURI)
 	pid := os.Getpid()
 	proc, _ := os.FindProcess(pid)
 	proc.Signal(syscall.SIGUSR1)
 	// io.WriteString(w, "APIServer: Server stoped")
 	w.Write([]byte("Server stoped\n"))
-}
-
-func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
-	params, _ := url.ParseQuery(req.URL.RawQuery)
-	// var id int
-	id, err := strconv.Atoi(params.Get("id"))
-
-	log.Printf("Received %v request", req.RequestURI)
-	if err != nil {
-		log.Println(err.Error())
-	} else {
-		cmdexec.Stop(id, w)
-	}
 }
 
 // Обработчик запроса 'cmd'
@@ -201,124 +188,15 @@ func (s *APIServer) execLongHandler(w http.ResponseWriter, req *http.Request) {
 	}()
 }
 
-// type Args struct {
-// 	Name string `json:"name"`
-// 	Desc string `json:"desc"`
-// 	Cmd  string `json:"cmd"`
-// }
+func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
+	params, _ := url.ParseQuery(req.URL.RawQuery)
+	// var id int
+	id, err := strconv.Atoi(params.Get("id"))
 
-// func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
-
-// 	/* Формат POST запроса curl, содержащего новую команду в теле
-// 	curl -X POST -json -d '{
-// 		"name": "date",
-// 		"desc": "Show current date",
-// 		"cmd": "echo \"Current date: \";date"
-// 	}' http://localhost:8080/new
-// 	*/
-
-// 	params, _ := url.ParseQuery(req.URL.RawQuery)
-// 	var name, desc, cmd, splitter string
-
-// 	contLen := req.ContentLength
-// 	// Если запрос содержит тело, аргументы, переданные через URL игнорируются
-// 	if contLen > 0 {
-// 		contByte := make([]byte, contLen)
-// 		req.Body.Read(contByte)
-
-// 		args := Args{}
-
-// 		e := json.Unmarshal(contByte, &args)
-// 		fmt.Println(e)
-
-// 		name = args.Name
-// 		desc = args.Desc
-// 		cmd = args.Cmd
-// 		splitter = ";"
-// 	} else {
-// 		name = params.Get("name")
-// 		desc = params.Get("desc")
-// 		cmd = params.Get("cmd")
-// 		splitter = "@@"
-// 	}
-
-// 	cmds := strings.Join(strings.Split(cmd, splitter), "\n")
-
-//		err := s.db.NewCommand(name, desc, cmds)
-//		if err != nil {
-//			http.Error(w, err.Error(), http.StatusBadRequest)
-//			// w.Write([]byte(err.Error()))
-//		} else {
-//			w.Write([]byte("Ok!"))
-//			// w.WriteHeader(http.StatusOK)
-//		}
-//	}
-
-// func (s *APIServer) newHandler(w http.ResponseWriter, req *http.Request) {
-
-// 	/* Формат POST запроса curl, содержащего новую команду в теле
-// 	curl -X POST -json -d '{
-// 		"name": "date",
-// 		"desc": "Show current date",
-// 		"cmd": "echo \"Current date: \";date"
-// 	}' http://localhost:8080/new
-// 	*/
-
-// 	params, _ := url.ParseQuery(req.URL.RawQuery)
-// 	var name, desc, cmd, splitter string
-
-// 	contLen := req.ContentLength
-// 	// Если запрос содержит тело, аргументы, переданные через URL игнорируются
-// 	if contLen > 0 {
-// 		contByte := make([]byte, contLen)
-// 		req.Body.Read(contByte)
-
-// 		args := Args{}
-
-// 		e := json.Unmarshal(contByte, &args)
-// 		fmt.Println(e)
-
-// 		name = args.Name
-// 		desc = args.Desc
-// 		cmd = args.Cmd
-// 		splitter = ";"
-// 	} else {
-// 		name = params.Get("name")
-// 		desc = params.Get("desc")
-// 		cmd = params.Get("cmd")
-// 		splitter = "@@"
-// 	}
-
-// 	cmds := pq.StringArray(strings.Split(cmd, splitter))
-
-// 	err := s.db.NewCommand(name, desc, cmds)
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusBadRequest)
-// 		// w.Write([]byte(err.Error()))
-// 	} else {
-// 		// w.Write([]byte("Ok!"))
-// 		w.WriteHeader(http.StatusOK)
-// 	}
-// }
-
-// func (s *APIServer) execHandler(w http.ResponseWriter, req *http.Request) {
-// 	params, _ := url.ParseQuery(req.URL.RawQuery)
-// 	name := params.Get("name")
-// 	_, cmd, err := s.db.GetCommand(name)
-
-//		if err != nil {
-//			http.Error(w, "Bad request", http.StatusBadRequest)
-//			// w.Write([]byte("Status: " + fmt.Sprintf("%d", http.StatusBadRequest) + " Bad request\n"))
-//			// w.Write([]byte(err.Error()))
-//			// w.WriteHeader(http.StatusBadRequest)
-//		} else {
-//			if len(cmd) == 1 {
-//				cmdexec.Exec(cmd[0], w)
-//			} else if len(cmd) > 1 {
-//				ch := make(chan (bool))
-//				go cmdexec.ExecLong(name, cmd, s.db, w, ch)
-//				<-ch // ждем, сообщения о запуске долгой команды
-//			}
-//			// w.WriteHeader(http.StatusOK)
-//		}
-//	}
+	log.Printf("Received %v request", req.RequestURI)
+	if err != nil {
+		log.Println(err.Error())
+	} else {
+		cmdexec.Stop(id, w)
+	}
+}
