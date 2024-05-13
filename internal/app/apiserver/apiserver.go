@@ -70,11 +70,9 @@ func (s *APIServer) Start() {
 }
 
 func (s *APIServer) shutdownHandler(w http.ResponseWriter, req *http.Request) {
-	// log.Printf("Received %v request", req.RequestURI)
 	pid := os.Getpid()
 	proc, _ := os.FindProcess(pid)
 	proc.Signal(syscall.SIGUSR1)
-	// io.WriteString(w, "APIServer: Server stoped")
 	w.Write([]byte("Server stoped\n"))
 }
 
@@ -192,7 +190,6 @@ func (s *APIServer) execLongHandler(w http.ResponseWriter, req *http.Request) {
 
 func (s *APIServer) stopHandler(w http.ResponseWriter, req *http.Request) {
 	params, _ := url.ParseQuery(req.URL.RawQuery)
-	// var id int
 	id, err := strconv.Atoi(params.Get("id"))
 
 	log.Printf("Received %v request", req.RequestURI)

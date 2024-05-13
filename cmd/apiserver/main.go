@@ -4,16 +4,14 @@ import (
 	"flag"
 	"fmt"
 
-	//"os"
-
 	"github.com/a-schus/REST-API/internal/app/apiserver"
 	"github.com/a-schus/REST-API/internal/app/store"
 )
 
 func main() {
 	ip := flag.String("ip", "localhost:8080", "IP")
-	user := flag.String("n", "schus", "User name")
-	pass := flag.String("p", "19schus78", "User password")
+	user := flag.String("n", "", "User name")
+	pass := flag.String("p", "", "User password")
 	host := flag.String("dbip", "localhost", "Database server IP")
 
 	flag.Parse()

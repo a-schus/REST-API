@@ -18,20 +18,9 @@ type DBConf struct {
 	Name string
 }
 
-// var conf DBConf
-
 type Store struct {
 	db *sql.DB
 }
-
-// func init() {
-// 	conf = DBConf{
-// 		user: "schus",
-// 		pass: "19schus78",
-// 		host: "localhost",
-// 		name: "restapi_dev",
-// 	}
-// }
 
 func (s *Store) Open(conf DBConf) error {
 	db, _ := sql.Open("postgres", "user="+conf.User+" password="+conf.Pass+" host="+conf.Host+" dbname="+conf.Name+" sslmode=disable")

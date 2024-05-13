@@ -27,8 +27,6 @@ func newLogWriter(_db *store.Store, _commID int, _name string) *LogWriter {
 	}
 }
 func (l *LogWriter) Write(p []byte) (n int, err error) {
-	// log.Println(string(p))
-
 	if len(p) > 0 {
 		err = l.db.WriteLog(l.commID, l.name, "", string(p))
 	}
@@ -44,23 +42,13 @@ func ExecLongScript(ctx context.Context, doneCh chan bool, id int, name string, 
 	cmdChans.Add(id, doneCh)
 	defer cmdChans.Remove(id)
 
-	// db.WriteLog(id, name, script, "Long command is runing")
 	outBuf := newLogWriter(db, id, name)
 	errBuf := newLogWriter(db, id, name)
 	c := exec.CommandContext(ctx, "bash", "-c", script)
 	c.Stdout = outBuf
 	c.Stderr = errBuf
-	/*err := */ c.Run()
-	// db.WriteLog(id, name, script, "Long command is done")
+	c.Run()
 	doneCh <- true
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusBadRequest)
-	// } else {
-	// 	d := outBuf.String()
-	// 	d = d[:len(d)-1]
-	// 	db.WriteLog(id, name, script, d)
-	// 	w.Write([]byte(outBuf.String()))
-	// }
 }
 
 func ExecScript(name string, script string, db *store.Store, w http.ResponseWriter) {
