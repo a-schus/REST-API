@@ -48,3 +48,15 @@
 
 6. **/shutdown**  
     GET запрос **http://localhost:8080/shutdown** позволяет удаленно безопасно завершить работу сервера.
+
+## Запуск тестов
+Для запуска тестов нужно перейти в корневую директорию проекта и открыть для редактирования файл Makefile.  
+В разделе test в строках  
+    go test -v ./internal/app/store -args -n name -p password -dbip DBServerIP  
+	go test -v ./internal/app/cmdexec -args -n name -p password -dbip DBServerIP  
+нужно заменить значения аргументов командной строки на реальные:  
+    **(name)** - имя пользователя PostgreSQL;  
+    **(password)** - пароль пользователя PostgreSQL;  
+    **(DBServerIP)** - ip адрес сервера PostgreSQL.
+
+После этого нужно в терминале перейти в корневую директорию проекта и выполнить команду **make test**.

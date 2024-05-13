@@ -4,7 +4,7 @@ build:
 
 .PHONY: test
 test:
-		go test -v ./internal/app/store -args -n schus -p 19schus78 -dbip localhost
-		go test -v ./internal/app/cmdexec -args -n schus -p 19schus78 -dbip localhost
+		go test -v ./internal/app/store -args -n name -p password -dbip DBServerIP
+		go test -v ./internal/app/cmdexec -args -n name -p password -dbip DBServerIP
 
 .DEFAULT_GOAL := build
