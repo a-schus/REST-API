@@ -35,12 +35,12 @@ func New(ip string, _db *store.Store) *APIServer {
 
 func (s *APIServer) Start() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/shutdown", s.shutdownHandler)
-	mux.HandleFunc("/stop", s.stopHandler)
-	mux.HandleFunc("/cmd", s.cmdHandler)
 	mux.HandleFunc("/new", s.newScriptHandler)
+	mux.HandleFunc("/cmd", s.cmdHandler)
 	mux.HandleFunc("/exec", s.execHandler)
 	mux.HandleFunc("/execlong", s.execLongHandler)
+	mux.HandleFunc("/stop", s.stopHandler)
+	mux.HandleFunc("/shutdown", s.shutdownHandler)
 
 	s.server.Handler = mux
 
@@ -56,7 +56,7 @@ func (s *APIServer) Start() {
 	log.Printf("The IP address being listened to %s\n", s.server.Addr)
 
 	// Мониторим системные сигналы на завершение программы
-	// и пользовательский сигнал запроса /close
+	// и пользовательский сигнал запроса /shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
 	<-sigChan
@@ -146,7 +146,9 @@ func (s *APIServer) newScriptHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	} else {
-		w.Write([]byte("Command added\n"))
+		w.Write([]byte("Command added and runing\n--------------------------\n"))
+		cmdexec.ExecScript(name, cmd, s.db, w)
+		w.Write([]byte("--------------------------\nCommand is done\n"))
 	}
 }
 
